@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>DALCAMED | Gestión de Informes</title>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <style>
+        :root { --primary: #002d72; --secondary: #00b5e2; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: white; padding: 35px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 450px; text-align: center; border-top: 8px solid var(--primary); }
+        .logo { font-size: 30px; font-weight: bold; color: var(--primary); margin-bottom: 5px; letter-spacing: 1px; text-transform: uppercase; }
+        .logo span { color: var(--secondary); }
+        .subtitle { font-size: 11px; color: #666; margin-bottom: 20px; line-height: 1.4; font-weight: 600; text-transform: uppercase; }
+        .box { background: #f8f9fa; padding: 20px; border-radius: 12px; margin: 25px 0; border: 1px solid #dee2e6; text-align: left; }
+        label { display: block; font-size: 10px; font-weight: bold; color: #495057; margin-bottom: 8px; text-transform: uppercase; }
+        input { width: 100%; margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+        button { background: var(--primary); color: white; border: none; padding: 15px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.2s; }
+        button:hover { background: var(--secondary); }
+        .status-ready { color: #28a745; background: #e8f5e9; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: bold; text-align: center; border: 1px solid #c8e6c9; margin-bottom: 15px; }
+        .setup-box { background: #fff3cd; border: 1px solid #ffeeba; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
+        .btn-reset { background: none; border: none; color: #dc3545; font-size: 10px; text-decoration: underline; cursor: pointer; margin-top: 15px; display: block; width: 100%; }
+        .footer-credit { font-size: 9px; color: #aaa; margin-top: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="logo">DALCA<span>MED</span></div>
+    <div class="subtitle">SISTEMA DE INFORMES ECOGRÁFICOS<br>CREADO POR CAMILO TORRES</div>
+    
+    <div id="setupSection" class="setup-box">
+        <label>⚙️ CONFIGURACIÓN DE MEMBRETE</label>
+        <p style="font-size: 11px; color: #856404; margin-bottom: 10px;">Sube el PDF de la hoja membretada una sola vez para guardarlo en este equipo.</p>
+        <input type="file" id="inputMembrete" accept=".pdf">
+        <button onclick="guardarMembrete()" style="background:#856404; padding: 10px; font-size: 13px;">GUARDAR HOJA MAESTRA</button>
+    </div>
+
+    <div id="mainSection" style="display:none;">
+        <div class="status-ready">✅ CONFIGURACIÓN CARGADA CORRECTAMENTE</div>
+        
+        <div class="box">
+            <label>1. Identificación del Paciente</label>
+            <input type="text" id="nombrePaciente" placeholder="Nombre completo del paciente">
+
+            <label>2. Archivo del Informe</label>
+            <input type="file" id="inputInforme" accept=".pdf">
+        </div>
+
+        <button onclick="generarPDF()">GENERAR E IMPRIMIR INFORME</button>
+        <button class="btn-reset" onclick="borrarMembrete()">Reemplazar Hoja Membretada</button>
+    </div>
+
+    <p id="msg" style="font-size: 13px; margin-top: 15px;"></p>
+    <div class="footer-credit">DALCAMED v2.0 - 2026</div>
+</div>
+
+<script>
+    const STORAGE_KEY = 'membrete_dalcamed_data_v2';
+
+    window.onload = function() {
+        if (localStorage.getItem(STORAGE_KEY)) {
+            mostrarPanelPrincipal();
+        }
+    };
+
+    function mostrarPanelPrincipal() {
+        document.getElementById('setupSection').style.display = 'none';
+        document.getElementById('mainSection').style.display = 'block';
+    }
+
+    async function guardarMembrete() {
+        const file = document.getElementById('inputMembrete').files[0];
+        if (!file) return alert("Por favor, selecciona el PDF del membrete.");
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const base64 = e.target.result.split(',')[1];
+            try {
+                localStorage.setItem(STORAGE_KEY, base64);
+                mostrarPanelPrincipal();
+            } catch (err) {
+                alert("Error: El archivo es muy grande. Intenta optimizar el PDF del membrete.");
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function borrarMembrete() {
+        if(confirm("¿Estás seguro de que quieres cambiar la hoja membretada maestra?")) {
+            localStorage.removeItem(STORAGE_KEY);
+            location.reload();
+        }
+    }
+
+    async function generarPDF() {
+        const fileI = document.getElementById('inputInforme').files[0];
+        const msg = document.getElementById('msg');
+        const nombre = document.getElementById('nombrePaciente').value.trim();
+        const base64Membrete = localStorage.getItem(STORAGE_KEY);
+
+        if (!fileI) return alert("Debe seleccionar el informe del paciente.");
+
+        msg.innerText = "⏳ Procesando documento...";
+        msg.style.color = "var(--primary)";
+
+        try {
+            const bytesM = Uint8Array.from(atob(base64Membrete), c => c.charCodeAt(0));
+            const bytesI = await fileI.arrayBuffer();
+
+            const pdfMembrete = await PDFLib.PDFDocument.load(bytesM);
+            const pdfInforme = await PDFLib.PDFDocument.load(bytesI);
+            const finalPdf = await PDFLib.PDFDocument.create();
+
+            const [membreteGrafico] = await finalPdf.embedPdf(pdfMembrete, [0]);
+            const mSize = pdfMembrete.getPages()[0].getSize();
+            const paginasInforme = await finalPdf.copyPages(pdfInforme, pdfInforme.getPageIndices());
+
+            for (let i = 0; i < paginasInforme.length; i++) {
+                const nuevaPagina = finalPdf.addPage([mSize.width, mSize.height]);
+                nuevaPagina.drawPage(membreteGrafico, { x: 0, y: 0, width: mSize.width, height: mSize.height });
+
+                const [paginaInformeGrafica] = await finalPdf.embedPdf(pdfInforme, [i]);
+                const iSize = pdfInforme.getPages()[i].getSize();
+
+                const xCentrado = (mSize.width - iSize.width) / 2;
+                const yCentrado = (mSize.height - iSize.height) / 2;
+
+                nuevaPagina.drawPage(paginaInformeGrafica, {
+                    x: xCentrado, y: yCentrado, width: iSize.width, height: iSize.height
+                });
+            }
+
+            const pdfBytes = await finalPdf.save();
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            
+            const fileName = nombre ? `Informe_${nombre.replace(/\s+/g, '_')}.pdf` : `Informe_DALCAMED_${new Date().getTime()}.pdf`;
+            link.download = fileName;
+            link.click();
+
+            msg.innerText = "✅ ¡Documento generado!";
+            msg.style.color = "green";
+
+        } catch (e) {
+            console.error(e);
+            msg.innerText = "❌ Error en el proceso técnico.";
+            msg.style.color = "red";
+        }
+    }
+</script>
+
+</body>
+</html>
